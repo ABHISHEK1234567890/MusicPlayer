@@ -9,6 +9,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -16,9 +17,15 @@ import android.graphics.Movie;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.StrictMode;
 import android.provider.MediaStore;
+import android.view.MotionEvent;
 import android.view.View;
+import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.SeekBar;
+
 import com.codencolors.musicdemo.R;
 import com.codencolors.musicdemo.adapter.MusicAdapter;
 import com.codencolors.musicdemo.helper.RecyclerTouchListener;
@@ -31,137 +38,97 @@ import java.util.List;
 import butterknife.BindView;
 import butterknife.ButterKnife;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity implements View.OnClickListener, View.OnTouchListener, MediaPlayer.OnCompletionListener, MediaPlayer.OnBufferingUpdateListener {
 
-    @BindView(R.id.rv_music) RecyclerView recyclerView;
+    private ImageButton buttonPlayPause;
+    private SeekBar seekBarProgress;
+    public EditText editTextSongURL;
 
-    private static final int MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE = 1;
-    private MediaPlayer musicPlayer;
-    private boolean isPlayed = false;
-    private List<Music> songsList;
+    private MediaPlayer mediaPlayer;
+    private int mediaFileLengthInMilliseconds; // this value contains the song duration in milliseconds. Look at getDuration() method in MediaPlayer class
 
+    private final Handler handler = new Handler();
+
+    /** Called when the activity is first created. */
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getMusicList();
-
         setContentView(R.layout.activity_main);
-        ButterKnife.bind(this);
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED)
-            setRecyclerView();
-        else
-            requestRead();
-
-        onRecyclerViewClick();
+        initView();
     }
 
-    //set layout manager to recyclerView
-    private void setRecyclerView(){
-        recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        MusicAdapter musicAdapter = new MusicAdapter(songsList, this);
-        recyclerView.setAdapter(musicAdapter);
+    /** This method initialise all the views in project*/
+    private void initView() {
+        buttonPlayPause = (ImageButton)findViewById(R.id.ButtonTestPlayPause);
+        buttonPlayPause.setOnClickListener(this);
+
+        seekBarProgress = (SeekBar)findViewById(R.id.SeekBarTestPlay);
+        seekBarProgress.setMax(99); // It means 100% .0-99
+        seekBarProgress.setOnTouchListener(this);
+        editTextSongURL = (EditText)findViewById(R.id.EditTextSongURL);
+
+        mediaPlayer = new MediaPlayer();
+        mediaPlayer.setOnBufferingUpdateListener(this);
+        mediaPlayer.setOnCompletionListener(this);
     }
 
-    //take read permission from user
-    private void requestRead() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
-                    MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE);
+    /** Method which updates the SeekBar primary progress by current song playing position*/
+    private void primarySeekBarProgressUpdater() {
+        seekBarProgress.setProgress((int)(((float)mediaPlayer.getCurrentPosition()/mediaFileLengthInMilliseconds)*100)); // This math construction give a percentage of "was playing"/"song length"
+        if (mediaPlayer.isPlaying()) {
+            Runnable notification = () -> primarySeekBarProgressUpdater();
+            handler.postDelayed(notification,1000);
         }
-    }
-
-    private void onRecyclerViewClick(){
-        recyclerView.addOnItemTouchListener(new RecyclerTouchListener(getApplicationContext(), recyclerView, new RecyclerTouchListener.ClickListener() {
-            @Override
-            public void onClick(View view, int position) {
-                playMusic(songsList.get(position).getSongPath());
-            }
-            @Override
-            public void onLongClick(View view, int position) {
-
-            }
-        }));
-    }
-
-    //get list of music
-    private void getMusicList(){
-        Cursor cursor;
-        songsList = new ArrayList<>();
-
-        String selection = MediaStore.Audio.Media.IS_MUSIC + " != 0";
-
-        String[] projection = {
-                MediaStore.Audio.Media._ID,
-                MediaStore.Audio.Media.ARTIST,
-                MediaStore.Audio.Media.TITLE,
-                MediaStore.Audio.Media.DATA,
-                MediaStore.Audio.Media.DISPLAY_NAME,
-                MediaStore.Audio.Media.SIZE
-        };
-
-        cursor = getApplicationContext().getContentResolver().query(
-                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                projection,
-                selection,
-                null,
-                null);
-
-        while(cursor.moveToNext()){
-            Music music = new Music();
-            music.setSongName(cursor.getString(2));
-            music.setArtist(cursor.getString(4));
-            music.setSongPath(cursor.getString(3));
-            music.setSongSize(cursor.getInt(5));
-            music.setSource(cursor.getString(1));
-            songsList.add(music);
-        }
-    }
-
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        switch (requestCode) {
-            case MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE:
-                if  (grantResults[0] != PackageManager.PERMISSION_GRANTED)
-                    requestRead();
-                break;
-        }
-    }
-
-    void playMusic(String musicPath) {
-        if (isPlayed)
-            stopMusic();
-
-        try {
-            startMusic(musicPath);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void startMusic(String fileName ) throws IOException {
-        isPlayed = true;
-        musicPlayer = new MediaPlayer();
-        musicPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-        musicPlayer.setDataSource(fileName);
-        musicPlayer.prepareAsync();
-        musicPlayer.setOnPreparedListener(mp -> musicPlayer.start());
-    }
-
-    public void stopMusic(){
-        musicPlayer.stop();
-        musicPlayer.release();
     }
 
     @Override
-    protected void onPause() {
-        // TODO Auto-generated method stub
-        super.onPause();
-        if (musicPlayer != null) {
-            musicPlayer.reset();
-            musicPlayer.release();
-            musicPlayer = null;
+    public void onClick(View v) {
+        if(v.getId() == R.id.ButtonTestPlayPause){
+            /** ImageButton onClick event handler. Method which start/pause mediaplayer playing */
+            try {
+                mediaPlayer.setDataSource("https://vprbbc.streamguys.net:80/vprbbc24.mp3"); // setup song from https://www.hrupin.com/wp-content/uploads/mp3/testsong_20_sec.mp3 URL to mediaplayer data source
+                mediaPlayer.prepare(); // you must call this method after setup the datasource in setDataSource method. After calling prepare() the instance of MediaPlayer starts load data from URL to internal buffer.
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+            mediaFileLengthInMilliseconds = mediaPlayer.getDuration(); // gets the song length in milliseconds from URL
+            editTextSongURL.setText(String.valueOf(mediaFileLengthInMilliseconds));
+
+            if(!mediaPlayer.isPlaying()){
+                mediaPlayer.start();
+                buttonPlayPause.setImageResource(R.drawable.ic_launcher_background);
+            }else {
+                mediaPlayer.pause();
+                buttonPlayPause.setImageResource(R.drawable.ic_launcher_background);
+            }
+
+            primarySeekBarProgressUpdater();
         }
+    }
+
+    @Override
+    public boolean onTouch(View v, MotionEvent event) {
+        if(v.getId() == R.id.SeekBarTestPlay){
+            /** Seekbar onTouch event handler. Method which seeks MediaPlayer to seekBar primary progress position*/
+            if(mediaPlayer.isPlaying()){
+                SeekBar sb = (SeekBar)v;
+                int playPositionInMillisecconds = (mediaFileLengthInMilliseconds / 100) * sb.getProgress();
+                mediaPlayer.seekTo(playPositionInMillisecconds);
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public void onCompletion(MediaPlayer mp) {
+        /** MediaPlayer onCompletion event handler. Method which calls then song playing is complete*/
+        buttonPlayPause.setImageResource(R.drawable.ic_launcher_background);
+    }
+
+    @Override
+    public void onBufferingUpdate(MediaPlayer mp, int percent) {
+        /** Method which updates the SeekBar secondary progress by current song loading from URL position*/
+        seekBarProgress.setSecondaryProgress(percent);
     }
 }

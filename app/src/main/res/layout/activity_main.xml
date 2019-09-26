@@ -7,13 +7,35 @@
     android:layout_height="match_parent"
     tools:context=".activities.MainActivity">
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rv_music"
+
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:clipToPadding="false"
-        android:paddingBottom="170dp">
+        android:orientation="vertical"
+        android:padding="10dp"
+        android:layout_height="match_parent">
 
-    </androidx.recyclerview.widget.RecyclerView>
+        <SeekBar
+            android:id="@+id/SeekBarTestPlay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
 
+        </SeekBar>
+
+        <EditText
+            android:id="@+id/EditTextSongURL"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+        </EditText>
+
+        <ImageButton
+            android:id="@+id/ButtonTestPlayPause"
+            android:layout_width="wrap_content"
+            android:text="Start"
+            android:layout_gravity="center"
+            android:layout_height="wrap_content">
+
+        </ImageButton>
+
+    </LinearLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
